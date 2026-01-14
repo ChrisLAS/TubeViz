@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -26,6 +27,24 @@ const (
 	BarGap       = 8    // Gap between bars
 	CenterGap    = 100  // Gap between top and bottom bar sections
 	MaxBarHeight = 0.50 // Maximum bar height as fraction of available space
+
+	// Logarithmic frequency binning constants
+	MinFreqHz = 40.0    // Lower bound of human hearing
+	MaxFreqHz = 18000.0 // Upper bound before Nyquist rolloff
+
+	// Spike prevention constant
+	MaxAudioJump = 2.2 // Maximum allowed jump between frames to prevent visual artifacts
+
+	// Velocity-based peak physics constants (vibeviz-style)
+	SmoothFactor      = 0.4   // EMA smoothing factor for bar heights
+	SmoothPeak        = 0.028 // Peak smoothing factor
+	PeakThreshold     = 0.008 // Threshold for detecting new peaks
+	SettleThreshold   = 0.012 // Threshold for settling state
+	PeakVelocityBase  = 0.09  // Base velocity for new peaks
+	PeakVelocityScale = 0.065 // Velocity scale factor based on magnitude
+	PeakDecelFactor   = 0.08  // Peak deceleration factor
+	PeakPowExp        = 1.3   // Exponent for velocity-based decay
+	PeakFriction      = 0.92  // Friction factor for velocity damping
 )
 
 // CAVA algorithm constants
@@ -87,6 +106,22 @@ const (
 	FramingLineHeight = 4 // Height in pixels of framing lines above/below center gap
 )
 
+// Theme types for visualization
+type ThemeType string
+
+const (
+	ThemeDefault   ThemeType = "default"
+	ThemeSynthwave ThemeType = "synthwave"
+)
+
+// Synthwave theme HSV constants
+const (
+	SynthwaveHueStart = 0.83 // Purple start
+	SynthwaveHueMid1  = 0.80 // Purple-Pink transition
+	SynthwaveHueMid2  = 0.66 // Pink
+	SynthwaveHueEnd   = 0.50 // Orange-Cyan end
+)
+
 // RuntimeConfig holds optional runtime overrides for customization
 // When fields are nil/empty, the defaults from constants above are used
 type RuntimeConfig struct {
@@ -102,6 +137,9 @@ type RuntimeConfig struct {
 	// Optional image path overrides
 	BackgroundImagePath string
 	ThumbnailImagePath  string
+
+	// Theme selection
+	Theme ThemeType
 }
 
 // GetBarColor returns the bar color RGB values (uses override or default)
@@ -158,4 +196,74 @@ func ParseHexColor(hex string) (r, g, b uint8, err error) {
 	b = uint8(rgb & 0xFF)
 
 	return r, g, b, nil
+}
+
+// HSVToRGB converts HSV color values to RGB
+// h: 0.0-1.0, s: 0.0-1.0, v: 0.0-1.0
+// Returns: r, g, b as 0-255 uint8 values
+func HSVToRGB(h, s, v float64) (r, g, b uint8) {
+	var c, x, m float64
+	var rFloat, gFloat, bFloat float64
+
+	if s == 0 {
+		rFloat, gFloat, bFloat = v, v, v
+	} else {
+		c = v * (1 - math.Abs(2*math.Mod(h, 1)-1))
+		x = c * (1 - math.Abs(math.Mod(h*6, 2)-1))
+		m = v - c
+
+		switch {
+		case h < 1/6:
+			rFloat, gFloat, bFloat = c, x, 0
+		case h < 2/6:
+			rFloat, gFloat, bFloat = x, c, 0
+		case h < 3/6:
+			rFloat, gFloat, bFloat = 0, c, x
+		case h < 4/6:
+			rFloat, gFloat, bFloat = 0, x, c
+		case h < 5/6:
+			rFloat, gFloat, bFloat = x, 0, c
+		default:
+			rFloat, gFloat, bFloat = c, 0, x
+		}
+	}
+
+	return uint8((rFloat + m) * 255), uint8((gFloat + m) * 255), uint8((bFloat + m) * 255)
+}
+
+// GetSynthwaveColor returns RGB color for Synthwave theme based on bar position and intensity
+func GetSynthwaveColor(barIndex, numBars int, intensity float64) (r, g, b uint8) {
+	// Clamp inputs to valid ranges to avoid math errors
+	barIndex := barIndex
+	if barIndex < 0 {
+		barIndex = 0
+	}
+	if barIndex >= numBars {
+		barIndex = numBars - 1
+	}
+
+	t := float64(barIndex) / float64(numBars-1)
+	var hue float64
+	
+	// Calculate hue based on position
+	if t < 0.3 {
+		hue = SynthwaveHueStart + t*(SynthwaveHueMid1-SynthwaveHueStart)/0.3
+	} else if t < 0.7 {
+		hue = SynthwaveHueMid1 + (t-0.3)*(SynthwaveHueMid2-SynthwaveHueMid1)/0.4
+	} else {
+		hue = SynthwaveHueMid2 + (t-0.7)*(SynthwaveHueEnd-SynthwaveHueMid2)/0.3
+	}
+
+	// Adjust saturation and value based on intensity for dynamic appearance
+	saturation := 0.72 + 0.23*math.Pow(intensity, 0.8)
+	value := 0.63 + 0.33*math.Pow(intensity, 0.5)
+
+	return HSVToRGB(hue, saturation, value)
+}
+
+	// Adjust saturation and value based on intensity for dynamic appearance
+	saturation := 0.72 + 0.23*math.Pow(intensity, 0.8)
+	value := 0.63 + 0.33*math.Pow(intensity, 0.5)
+
+	return HSVToRGB(hue, saturation, value)
 }

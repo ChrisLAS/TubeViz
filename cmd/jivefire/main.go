@@ -36,6 +36,7 @@ var CLI struct {
 	ThumbnailImage  string `help:"Path to custom thumbnail image (PNG, 1280x720)"`
 	NoPreview       bool   `help:"Disable video preview during encoding"`
 	Encoder         string `help:"Video encoder: auto, nvenc, qsv, vaapi, vulkan, software" default:"auto"`
+	Theme           string `help:"Visualization theme: default, synthwave" default:"synthwave"`
 	Version         bool   `help:"Show version information"`
 	Probe           bool   `help:"Probe and display available hardware encoders"`
 }
@@ -109,6 +110,17 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate theme option
+	validThemes := map[string]config.ThemeType{
+		"default":   config.ThemeDefault,
+		"synthwave": config.ThemeSynthwave,
+	}
+	themeType, ok := validThemes[CLI.Theme]
+	if !ok {
+		cli.PrintError(fmt.Sprintf("invalid --theme value: %s (must be default or synthwave)", CLI.Theme))
+		os.Exit(1)
+	}
+
 	// If user explicitly requested a specific hardware encoder, verify it's available
 	if hwAccelType != encoder.HWAccelAuto && hwAccelType != encoder.HWAccelNone {
 		selectedEncoder := encoder.SelectBestEncoder(hwAccelType)
@@ -133,7 +145,9 @@ func main() {
 	}
 
 	// Build runtime config from CLI arguments
-	runtimeConfig := &config.RuntimeConfig{}
+	runtimeConfig := &config.RuntimeConfig{
+		Theme: themeType, // Use CLI theme option
+	}
 
 	// Parse and validate bar color if provided
 	if CLI.BarColor != "" {
@@ -351,23 +365,15 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 	}
 	audioCodecInfo := fmt.Sprintf("AAC %.1fkHz %s", float64(audioSampleRate)/1000.0, audioChannelStr)
 
-	// CAVA algorithm state
+	// Velocity-based peak physics state (vibeviz-style)
 	prevBarHeights := make([]float64, config.NumBars)
-	cavaPeaks := make([]float64, config.NumBars)
-	cavaFall := make([]float64, config.NumBars)
-	cavaMem := make([]float64, config.NumBars)
+	velocityPeaks := make([]float64, config.NumBars)
+	velocityVals := make([]float64, config.NumBars)
 
 	// Pre-allocate reusable buffers to avoid allocations in render loop
 	barHeights := make([]float64, config.NumBars)
 	rearrangedHeights := make([]float64, config.NumBars)
 	barHeightsCopy := make([]float64, config.NumBars) // For UI updates
-
-	// Calculate gravity modifier (CAVA formula)
-	// Scales bar fall speed based on framerate deviation from CAVA's reference 60fps
-	gravityMod := math.Pow(config.GravityFramerateRef/config.Framerate, config.GravityExponent) * config.GravityBase / config.NoiseReduction
-	if gravityMod < config.GravityMin {
-		gravityMod = config.GravityMin
-	}
 
 	// Auto-sensitivity adjustment (CAVA-style)
 	sensitivity := 1.0
@@ -465,27 +471,36 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 			barHeights[i] *= availableHeight
 		}
 
-		// Apply CAVA-style gravity smoothing
+		// Apply spike prevention to eliminate visual artifacts from sudden audio jumps
+		for i := range barHeights {
+			if barHeights[i] > prevBarHeights[i]*config.MaxAudioJump {
+				barHeights[i] = prevBarHeights[i] * config.MaxAudioJump
+			}
+			if barHeights[i] < prevBarHeights[i]/config.MaxAudioJump {
+				barHeights[i] = prevBarHeights[i] / config.MaxAudioJump
+			}
+		}
+
+		// Apply velocity-based peak physics (vibeviz-style)
 		for i := range barHeights {
 			currentHeight := barHeights[i]
 
-			if currentHeight < prevBarHeights[i] {
-				// Falling: apply gravity with quadratic acceleration
-				currentHeight = cavaPeaks[i] * (1.0 - (cavaFall[i] * cavaFall[i] * gravityMod))
-				cavaFall[i] += config.FallAccel
-
-				if currentHeight < 0 {
-					currentHeight = 0
-				}
+			if currentHeight > velocityPeaks[i]+config.PeakThreshold {
+				// New peak detected
+				velocityPeaks[i] = currentHeight
+				velocityVals[i] = config.PeakVelocityBase + config.PeakVelocityScale*currentHeight
+			} else if currentHeight < velocityPeaks[i]-config.SettleThreshold {
+				// Peak decay with physics simulation
+				powdec := math.Pow(velocityVals[i], config.PeakPowExp)
+				velocityPeaks[i] -= (config.SmoothPeak + config.PeakDecelFactor) * powdec
+				velocityVals[i] *= config.PeakFriction // Apply friction
 			} else {
-				// Rising: new peak
-				cavaPeaks[i] = currentHeight
-				cavaFall[i] = 0.0
+				// Settled state
+				velocityPeaks[i] = currentHeight
 			}
 
-			// CAVA integral smoothing
-			currentHeight = cavaMem[i]*config.NoiseReduction + currentHeight
-			cavaMem[i] = currentHeight
+			// Apply EMA smoothing
+			currentHeight = config.SmoothFactor*velocityPeaks[i] + (1-config.SmoothFactor)*currentHeight
 
 			// Soft knee compression
 			if currentHeight > availableHeight {

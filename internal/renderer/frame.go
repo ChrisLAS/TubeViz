@@ -30,6 +30,10 @@ type Frame struct {
 	barColorTable   [][3]uint8 // Pre-computed bar colors at different intensity levels
 	framingLineData []byte     // Pre-rendered framing line pixel pattern
 	hasBackground   bool
+
+	// Theme information
+	theme    config.ThemeType
+	useTheme bool // Whether to use theme-based coloring
 }
 
 var framePool = sync.Pool{
@@ -47,9 +51,11 @@ func NewFrame(bgImage *image.RGBA, fontFace font.Face, episodeNum int, title str
 	// Calculate maximum possible bar height
 	maxBarHeight := centerY - config.CenterGap/2
 
-	// Get colors from runtime config (uses override or default)
+	// Get colors and theme from runtime config
 	barR, barG, barB := runtimeConfig.GetBarColor()
 	textR, textG, textB := runtimeConfig.GetTextColor()
+	theme := runtimeConfig.Theme
+	useTheme := theme == config.ThemeSynthwave
 
 	// Pre-compute intensity gradient table (0.5 to 1.0 range for opaque gradient)
 	// This creates a fade from dim at tips to bright at center without alpha blending
@@ -61,13 +67,17 @@ func NewFrame(bgImage *image.RGBA, fontFace font.Face, episodeNum int, title str
 	}
 
 	// Pre-compute bar colors at different intensity levels (0-255)
-	// Colors are fully opaque - RGB values dimmed by intensity, alpha always 255
-	barColorTable := make([][3]uint8, 256)
-	for intensity := 0; intensity < 256; intensity++ {
-		factor := float64(intensity) / 255.0
-		barColorTable[intensity][0] = uint8(float64(barR) * factor)
-		barColorTable[intensity][1] = uint8(float64(barG) * factor)
-		barColorTable[intensity][2] = uint8(float64(barB) * factor)
+	// For theme mode, we'll compute dynamically per bar for proper gradient effects
+	var barColorTable [][3]uint8
+	if !useTheme {
+		// Legacy mode: pre-compute single color at different intensities
+		barColorTable = make([][3]uint8, 256)
+		for intensity := 0; intensity < 256; intensity++ {
+			factor := float64(intensity) / 255.0
+			barColorTable[intensity][0] = uint8(float64(barR) * factor)
+			barColorTable[intensity][1] = uint8(float64(barG) * factor)
+			barColorTable[intensity][2] = uint8(float64(barB) * factor)
+		}
 	}
 
 	// Pre-render framing line pattern (text color from config)
@@ -101,6 +111,8 @@ func NewFrame(bgImage *image.RGBA, fontFace font.Face, episodeNum int, title str
 		barColorTable:   barColorTable,
 		framingLineData: framingLineData,
 		hasBackground:   bgImage != nil,
+		theme:           theme,
+		useTheme:        useTheme,
 	}
 
 	return f
@@ -171,7 +183,7 @@ func (f *Frame) drawBars(barHeights []float64) {
 		yStart := f.centerY - barHeight - config.CenterGap/2
 		yEnd := f.centerY - config.CenterGap/2
 
-		f.renderBar(x, yStart, yEnd, barHeight, pixelPattern)
+		f.renderBar(x, yStart, yEnd, barHeight, pixelPattern, i)
 	}
 
 	// Now mirror in 3 operations to fill remaining 3/4 of the bars:
@@ -194,7 +206,14 @@ func (f *Frame) drawBars(barHeights []float64) {
 		f.mirrorBarVertical(xLeft, yStart, yEnd)
 
 		// 2. Horizontal mirror: create right-side upward bars
-		f.mirrorBarHorizontal(xLeft, xRight, yStart, yEnd)
+		// For theme mode, we need to render with correct colors
+		if f.useTheme {
+			rightBarIndex := config.NumBars - 1 - i
+			pixelPattern := make([]byte, config.BarWidth*4)
+			f.renderBar(xRight, yStart, yEnd, barHeight, pixelPattern, rightBarIndex)
+		} else {
+			f.mirrorBarHorizontal(xLeft, xRight, yStart, yEnd)
+		}
 
 		// 3. Both mirrors: create right-side downward bars
 		f.mirrorBarVertical(xRight, yStart, yEnd)
@@ -202,7 +221,7 @@ func (f *Frame) drawBars(barHeights []float64) {
 }
 
 // renderBar renders a single upward bar with opaque gradient (no alpha blending)
-func (f *Frame) renderBar(x, yStart, yEnd, barHeight int, pixelPattern []byte) {
+func (f *Frame) renderBar(x, yStart, yEnd, barHeight int, pixelPattern []byte, barIndex int) {
 	for y := yStart; y < yEnd; y++ {
 		if y < 0 {
 			continue
@@ -215,14 +234,30 @@ func (f *Frame) renderBar(x, yStart, yEnd, barHeight int, pixelPattern []byte) {
 			intensityIndex = f.maxBarHeight - 1
 		}
 		intensity := f.intensityTable[intensityIndex]
-		colors := &f.barColorTable[intensity]
+
+		// Get colors based on theme mode
+		var r, g, b uint8
+		if f.useTheme {
+			// Theme mode: calculate color based on bar position and intensity
+			intensityFactor := float64(intensity) / 255.0
+			if f.theme == config.ThemeSynthwave {
+				r, g, b = config.GetSynthwaveColor(barIndex, config.NumBars/2, intensityFactor)
+			} else {
+				// Fallback to default red color if theme is not synthwave
+				r, g, b = 164, 0, 0
+			}
+		} else {
+			// Legacy mode: use pre-computed color table
+			colors := &f.barColorTable[intensity]
+			r, g, b = colors[0], colors[1], colors[2]
+		}
 
 		// Fill pixel pattern once for this scanline
 		for px := 0; px < config.BarWidth; px++ {
 			offset := px * 4
-			pixelPattern[offset] = colors[0]
-			pixelPattern[offset+1] = colors[1]
-			pixelPattern[offset+2] = colors[2]
+			pixelPattern[offset] = r
+			pixelPattern[offset+1] = g
+			pixelPattern[offset+2] = b
 			pixelPattern[offset+3] = 255 // Fully opaque
 		}
 

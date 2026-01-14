@@ -18,41 +18,61 @@ func ApplyHanning(data []float64) []float64 {
 	return windowed
 }
 
-// BinFFT bins FFT coefficients into bars and returns normalized values (0.0-1.0)
-// CAVA-style approach: work in normalized space, apply maxBarHeight scaling later
+// BinFFT bins FFT coefficients into bars using logarithmic frequency distribution
+// Returns normalized values (0.0-1.0) with perceptually accurate frequency representation
 // baseScale is calculated from Pass 1 analysis for optimal visualization
 // result buffer is provided by caller to avoid allocations
 func BinFFT(coeffs []complex128, sensitivity float64, baseScale float64, result []float64) {
 	// Use only first half (positive frequencies)
 	halfSize := len(coeffs) / 2
+	sampleRate := config.SampleRate
+	fftSize := config.FFTSize
 
-	// Use full spectrum up to Nyquist frequency (~22kHz at 44.1kHz sample rate)
-	// This captures the complete audible range including high-frequency content
-	// from cymbals, hi-hats, and musical "air" in stings and bumpers
-	maxFreqBin := halfSize
+	// Create logarithmic frequency table (MinFreqHz to MaxFreqHz)
+	// This gives perceptually accurate frequency distribution matching human hearing
+	freqTable := make([]float64, config.NumBars+1)
+	for i := 0; i <= config.NumBars; i++ {
+		t := float64(i) / float64(config.NumBars)
+		freqTable[i] = config.MinFreqHz * math.Pow(config.MaxFreqHz/config.MinFreqHz, t)
+	}
 
-	binsPerBar := maxFreqBin / config.NumBars
-
+	// Convert frequencies to FFT bin indices and process logarithmic bins
 	for bar := 0; bar < config.NumBars; bar++ {
-		start := bar * binsPerBar
-		end := start + binsPerBar
-		if end > maxFreqBin {
-			end = maxFreqBin
+		startFreq := freqTable[bar]
+		endFreq := freqTable[bar+1]
+
+		// Convert frequency range to FFT bin indices
+		startBin := int(startFreq * float64(fftSize) / float64(sampleRate))
+		endBin := int(endFreq * float64(fftSize) / float64(sampleRate))
+
+		if endBin > halfSize {
+			endBin = halfSize
+		}
+		if startBin >= endBin {
+			startBin = endBin - 1
+			if startBin < 0 {
+				startBin = 0
+			}
 		}
 
-		// Average magnitude in this range
+		// Average magnitude in this logarithmic frequency range
 		var sum float64
-		for i := start; i < end; i++ {
+		var count int
+		for i := startBin; i < endBin; i++ {
 			magnitude := math.Sqrt(real(coeffs[i])*real(coeffs[i]) + imag(coeffs[i])*imag(coeffs[i]))
 			sum += magnitude
+			count++
 		}
 
-		result[bar] = sum / float64(binsPerBar)
+		if count > 0 {
+			result[bar] = sum / float64(count)
+		} else {
+			result[bar] = 0
+		}
 	}
 
 	// CAVA-style processing: apply sensitivity, then normalize to 0.0-1.0 range
 	// baseScale provided from Pass 1 analysis: OptimalBaseScale = 0.85 / GlobalPeak
-
 	for i := range result {
 		// Apply sensitivity to raw magnitude
 		scaled := result[i] * baseScale * sensitivity
