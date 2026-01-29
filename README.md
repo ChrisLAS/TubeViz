@@ -67,13 +67,8 @@ just test-encoder # Test encoder
 
 FFmpeg’s built-in visualization filters (`showfreqs`, `showspectrum`) produce continuous spectra, not discrete bars. That’s a non-starter. You can stack filters all day — you’ll never get a clean, intentional 64-bar look out of FFmpeg alone.
 
-So Jivefire's big brain move was: flip the model, do the FFT analysis and bar rendering ourselves, then hand-finished frames to FFmpeg purely for encoding. A great idea, and we are going to build off it.
+So Jivefire's big brain move was to flip the model, do the FFT analysis and bar rendering ourselves, then hand-finish frames to FFmpeg purely for encoding. A great idea, and we are going to build off it with algorithm improvements, 48Khz support, and a few other workflow tweaks.
 
-**Why Go instead of Python?**  
-
-Podcast production demands headless, multi-architecture tools that run in pipelines; not a frozen desktop app.
-
-The TubeViz architecture is documented in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Attribution
 
