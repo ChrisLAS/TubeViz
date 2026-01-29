@@ -8,7 +8,7 @@ Forked from [Jivefire](https://github.com/linuxmatters/jivefire) with enhanced v
 
 Your podcast audio deserves more than a static image on YouTube. TubeViz transforms WAV/MP3/FLAC into delightful 720p visuals—bars that breathe with your dialogue, rise with your laughter, and groove through every frequency.
 
-<div align="center"><video src=".github/tubefire.mp4" width="860" loop muted playsinline autoplay></video></div>
+<div align="center"><img alt="TubeViz Demo" src=".github/tubefire.gif" width="860" /></div>
 
 ### Enhanced Features
 
