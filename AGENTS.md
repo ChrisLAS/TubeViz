@@ -10,7 +10,6 @@
 - Run all tests: `just test`
 - Test encoding with multiple formats: `just test-encoder` (mp3/flac/wav, mono/stereo)
 - Benchmark RGB→YUV conversion: `just bench-yuv`
-- Record demo tape: `just vhs`
 
 ## Architecture (2-Pass Streaming)
 
@@ -19,7 +18,7 @@
 - Memory-efficient: ~50MB footprint for 30-minute audio vs 600MB for single-pass
 
 ### Key Modules
-- `cmd/jivefire/main.go` — CLI entry, 2-pass coordinator
+- `cmd/jivefire/main.go` — TubeViz CLI entry, 2-pass coordinator
 - `internal/audio/` — FFmpegDecoder implements AudioDecoder interface, FFT analysis
 - `internal/encoder/` — ffmpeg-statigo wrapper, RGB→YUV conversion, FIFO buffer
 - `internal/renderer/` — Frame generation, bar drawing, thumbnail
@@ -51,8 +50,16 @@
 
 - British English spelling in comments and user-facing text
 - All video/audio constants centralised in `internal/config/config.go`
-- Embedded assets (fonts, images) in `internal/renderer/assets/`
+- Embedded assets (fonts, images) in `internal/renderer/assets/` (Ubuntu for video/thumbnail fonts)
 - CLI uses Kong for argument parsing with custom styled help
+
+## Branding & Defaults
+
+- Binary name is `tubeviz` (built via `just build`)
+- TUI header shows “TubeViz 📺”
+- Default bar/text colour is Bitcoin orange `#F7931A`
+- Episode number overlay is hidden by default; use `--show-episode` to enable
+- Thumbnail text is Ubuntu Bold with a soft glow and box‑fitting layout
 
 ## Testing Instructions
 
@@ -80,7 +87,7 @@
 ## Environment
 
 - NixOS development shell via `flake.nix`
-- Fish shell for terminal commands
+- Bash shell for terminal commands
 - CGO required (`CGO_ENABLED=1` in build)
 - Go 1.24.0 minimum
 
