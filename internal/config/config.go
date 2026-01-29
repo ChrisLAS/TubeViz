@@ -208,7 +208,7 @@ func HSVToRGB(h, s, v float64) (r, g, b uint8) {
 	if s == 0 {
 		rFloat, gFloat, bFloat = v, v, v
 	} else {
-		c = v * (1 - math.Abs(2*math.Mod(h, 1)-1))
+		c = v * s // Chroma = value * saturation (standard HSV formula)
 		x = c * (1 - math.Abs(math.Mod(h*6, 2)-1))
 		m = v - c
 
@@ -234,7 +234,6 @@ func HSVToRGB(h, s, v float64) (r, g, b uint8) {
 // GetSynthwaveColor returns RGB color for Synthwave theme based on bar position and intensity
 func GetSynthwaveColor(barIndex, numBars int, intensity float64) (r, g, b uint8) {
 	// Clamp inputs to valid ranges to avoid math errors
-	barIndex := barIndex
 	if barIndex < 0 {
 		barIndex = 0
 	}
@@ -244,7 +243,7 @@ func GetSynthwaveColor(barIndex, numBars int, intensity float64) (r, g, b uint8)
 
 	t := float64(barIndex) / float64(numBars-1)
 	var hue float64
-	
+
 	// Calculate hue based on position
 	if t < 0.3 {
 		hue = SynthwaveHueStart + t*(SynthwaveHueMid1-SynthwaveHueStart)/0.3
@@ -253,13 +252,6 @@ func GetSynthwaveColor(barIndex, numBars int, intensity float64) (r, g, b uint8)
 	} else {
 		hue = SynthwaveHueMid2 + (t-0.7)*(SynthwaveHueEnd-SynthwaveHueMid2)/0.3
 	}
-
-	// Adjust saturation and value based on intensity for dynamic appearance
-	saturation := 0.72 + 0.23*math.Pow(intensity, 0.8)
-	value := 0.63 + 0.33*math.Pow(intensity, 0.5)
-
-	return HSVToRGB(hue, saturation, value)
-}
 
 	// Adjust saturation and value based on intensity for dynamic appearance
 	saturation := 0.72 + 0.23*math.Pow(intensity, 0.8)
