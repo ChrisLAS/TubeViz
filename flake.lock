@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "ffmpeg-statigo": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1768414542,
+        "narHash": "sha256-xkuvggFPnKv8d/0A7yCuGTw/48MAOCabHFMW6i920Rs=",
+        "owner": "linuxmatters",
+        "repo": "ffmpeg-statigo",
+        "rev": "4b9e3969d5e2d7140db5743b9c42b525110920bf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "linuxmatters",
+        "repo": "ffmpeg-statigo",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": "systems"
@@ -36,6 +52,7 @@
     },
     "root": {
       "inputs": {
+        "ffmpeg-statigo": "ffmpeg-statigo",
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs"
       }

@@ -1,9 +1,13 @@
 {
-  description = "Visualiser for linuxmatters.sh";
+  description = "TubeViz - audio visualiser that renders MP4 video from podcast audio";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    ffmpeg-statigo = {
+      url = "github:linuxmatters/ffmpeg-statigo";
+      flake = false;
+    };
   };
 
   outputs =
@@ -11,14 +15,56 @@
       self,
       nixpkgs,
       flake-utils,
+      ffmpeg-statigo,
     }:
-
-    flake-utils.lib.eachDefaultSystem (
+    flake-utils.lib.eachSystem [ "x86_64-linux" ] (
       system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = nixpkgs.legacyPackages.${system};
+        version = self.shortRev or "dev";
+        ffmpegStatigoLib = pkgs.fetchurl {
+          url = "https://github.com/linuxmatters/ffmpeg-statigo/releases/download/lib-8.0.1.0/ffmpeg-linux-amd64.tar.gz";
+          hash = "sha256-nfakHmdmb++pR7ridXo2QN/V47p9KsVwfI0uo71Pkbk=";
+        };
       in
       {
+        packages.tubeviz = pkgs.buildGoModule {
+          pname = "tubeviz";
+          inherit version;
+          src = self;
+          subPackages = [ "cmd/jivefire" ];
+          vendorHash = "sha256-ZQi5efJlY9fNRDtR8oA2Fm/bM2MyG7nIk7uypv2dzC8=";
+          ldflags = [ "-X main.version=${version}" ];
+          buildInputs = [ pkgs.ffmpeg-full ];
+          nativeBuildInputs = [ pkgs.pkg-config pkgs.gnutar ];
+          doCheck = false;
+          preBuild = ''
+            mkdir -p third_party
+            cp -R ${ffmpeg-statigo} third_party/ffmpeg-statigo
+            chmod -R u+w third_party/ffmpeg-statigo
+            mkdir -p third_party/ffmpeg-statigo/lib
+            tar -xzf ${ffmpegStatigoLib} -C third_party/ffmpeg-statigo/lib
+
+            chmod -R u+w vendor || true
+            mkdir -p vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64
+            cp third_party/ffmpeg-statigo/lib/linux_amd64/libffmpeg.a \
+              vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64/
+          '';
+          postInstall = ''
+            if [ -f "$out/bin/jivefire" ]; then
+              mv "$out/bin/jivefire" "$out/bin/tubeviz"
+            fi
+          '';
+          meta.mainProgram = "tubeviz";
+        };
+
+        packages.default = self.packages.${system}.tubeviz;
+
+        apps.default = flake-utils.lib.mkApp {
+          drv = self.packages.${system}.tubeviz;
+          exePath = "/bin/tubeviz";
+        };
+
         devShells.default = pkgs.mkShell {
           packages =
             with pkgs;
@@ -29,6 +75,7 @@
               gcc
               go
               just
+              pciutils
               vhs
             ]
             ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
@@ -39,7 +86,6 @@
 
           # Make GPU drivers visible for hardware-accelerated encoding
           # Linux: NixOS mounts GPU drivers under /run/opengl-driver/lib
-          # macOS: VideoToolbox uses system frameworks, no LD_LIBRARY_PATH needed
           shellHook = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
             # If the opengl driver directory exists, prepend it to LD_LIBRARY_PATH
             if [ -d "/run/opengl-driver/lib" ]; then
@@ -75,7 +121,6 @@
 
             # Vulkan ICD discovery: tell vulkan-loader where to find GPU drivers
             # NixOS installs ICDs under /run/opengl-driver/share/vulkan/icd.d/
-            # This enables NVIDIA Vulkan on systems with both Intel iGPU and NVIDIA dGPU
             if [ -d "/run/opengl-driver/share/vulkan/icd.d" ]; then
               export VK_DRIVER_FILES=$(find /run/opengl-driver/share/vulkan/icd.d -name '*.json' 2>/dev/null | tr '\n' ':' | sed 's/:$//')
             fi
