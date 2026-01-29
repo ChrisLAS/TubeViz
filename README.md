@@ -4,13 +4,13 @@
 
 Forked from [Jivefire](https://github.com/linuxmatters/jivefire) with enhanced visualization algorithms inspired by [vibeviz](https://github.com/noblepayne/vibeviz).
 
-## The Groove
+## Overview
 
-Your podcast audio deserves more than a static image on YouTube. TubeViz transforms WAV/MP3/FLAC into delightful 720p visuals—bars that breathe with your dialogue, rise with your laughter, and groove through every frequency.
+TubeViz turns plain audio into motion. Feed it WAV, MP3, or FLAC and get 720p visuals that react to every word, laugh, and frequency.
 
 <div align="center"><img alt="TubeViz Demo" src=".github/tubefire.gif" width="860" /></div>
 
-### Enhanced Features
+### Fancy Features
 
 - 🎬 **Two-pass streaming pipeline** for accurate scaling with low memory use
 - 🌈 **Synthwave theme** with purple→pink→cyan gradient bars
@@ -37,12 +37,6 @@ Your podcast audio deserves more than a static image on YouTube. TubeViz transfo
 ./tubeviz --episode=42 --title="Linux Matters" input.wav output.mp4 --theme synthwave
 ```
 
-### Example
-
-<div align="center">
-  <img alt="Linux Matters: Episode 65 (macOS Made Me Snap)" src=".github/thumbnail.png" width="640">
-</div>
-
 ## Build
 
 TubeViz uses [ffmpeg-statigo](https://github.com/linuxmatters/ffmpeg-statigo) for FFmpeg static bindings.
@@ -59,11 +53,15 @@ just test-encoder # Test encoder
 
 ## Why TubeViz?
 
-FFmpeg's audio visualisation filters (`showfreqs`, `showspectrum`) render continuous frequency spectra, not discrete bars. No amount of FFmpeg filter chain kung-fu can achieve the discrete 64-bar aesthetic required for podcast branding. Solution: Do the FFT analysis and bar rendering in Go, pipe frames to FFmpeg for encoding.
+FFmpeg’s built-in visualization filters (`showfreqs`, `showspectrum`) produce continuous spectra, not discrete bars. That’s a non-starter. You can stack filters all day — you’ll never get a clean, intentional 64-bar look out of FFmpeg alone.
 
-**Why Go over Python?** The original `djfun/audio-visualizer-python` tool is a moribund Qt5 GUI with significant tech debt. For our podcast production needs we wanted multi-architecture tools that can integrate into automation pipelines.
+So Jivefire's big brain move was: flip the model, do the FFT analysis and bar rendering ourselves, then hand-finished frames to FFmpeg purely for encoding. A great idea, and we are going to build off it.
 
-The TubeViz architecture is available in the [ARCHITECTURE.md](docs/ARCHITECTURE.md) document.
+**Why Go instead of Python?**  
+
+Podcast production demands headless, multi-architecture tools that run in pipelines; not a frozen desktop app.
+
+The TubeViz architecture is documented in [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Attribution
 
