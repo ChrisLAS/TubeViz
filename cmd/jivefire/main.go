@@ -472,7 +472,11 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		}
 
 		// Apply spike prevention to eliminate visual artifacts from sudden audio jumps
+		// Skip clamping per bar until we've seen a non-zero value for that bar.
 		for i := range barHeights {
+			if prevBarHeights[i] <= 0 {
+				continue
+			}
 			if barHeights[i] > prevBarHeights[i]*config.MaxAudioJump {
 				barHeights[i] = prevBarHeights[i] * config.MaxAudioJump
 			}
@@ -510,7 +514,6 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 
 			prevBarHeights[i] = currentHeight
 		}
-
 		// Rearrange frequencies for center-out distribution
 		audio.RearrangeFrequenciesCenterOut(prevBarHeights, rearrangedHeights)
 
