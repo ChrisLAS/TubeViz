@@ -74,7 +74,7 @@ var (
 // PrintBanner prints the application banner
 func PrintBanner() {
 	banner := TitleStyle.Render("TubeViz 📺")
-	subtitle := SubtitleStyle.Render("Spin your podcast .wav into a groovy MP4 visualiser with Cava-inspired real-time audio frequencies.")
+	subtitle := SubtitleStyle.Render("TubeViz turns podcast audio into a groovy MP4 visualiser with Cava-inspired real-time audio frequencies.")
 	fmt.Println(banner)
 	fmt.Println(subtitle)
 	fmt.Println()

@@ -46,7 +46,7 @@ func StyledHelpPrinter(options kong.HelpOptions) kong.HelpPrinter {
 		// Title and description
 		sb.WriteString(helpTitleStyle.Render("TubeViz 📺"))
 		sb.WriteString("\n")
-		sb.WriteString(helpDescStyle.Render("Spin your podcast .wav into a groovy MP4 visualiser with Cava-inspired real-time audio frequencies."))
+		sb.WriteString(helpDescStyle.Render("TubeViz turns podcast audio into a groovy MP4 visualiser with Cava-inspired real-time audio frequencies."))
 		sb.WriteString("\n")
 
 		// Usage
