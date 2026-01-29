@@ -10,6 +10,12 @@ Forked from [Jivefire](https://github.com/linuxmatters/jivefire) with enhanced v
 nix run github:ChrisLAS/TubeViz#tubeviz -- input.wav output.mp4 --theme synthwave
 ```
 
+### Install with Nix
+
+```bash
+nix profile install github:ChrisLAS/TubeViz#tubeviz
+```
+
 ## Overview
 
 TubeViz turns plain audio into motion. Feed it WAV, MP3, or FLAC and get 720p visuals that react to every word, laugh, and frequency.
