@@ -1,21 +1,27 @@
-# Jivefire 🔥
+# TubeViz 🎬
 
-> Spin your podcast .wav into a groovy MP4 visualiser with [Cava](https://github.com/karlstav/cava)-inspired real-time audio frequencies.
+> Transform your podcast audio into stunning YouTube visualizations with Synthwave-themed frequency bars and advanced algorithms.
+
+Forked from [Jivefire](https://github.com/linuxmatters/jivefire) with enhanced visualization algorithms inspired by [vibeviz](https://github.com/noblepayne/vibeviz).
 
 ## The Groove
 
-Your podcast audio deserves more than a static image on YouTube. Jivefire transforms WAV/MP3/FLAC into delightful 720p visuals—bars that breathe with your dialogue, rise with your laughter, and groove through every frequency.
+Your podcast audio deserves more than a static image on YouTube. TubeViz transforms WAV/MP3/FLAC into delightful 720p visuals—bars that breathe with your dialogue, rise with your laughter, and groove through every frequency.
 
-<div align="center"><img alt="Jivefire Demo" src=".github/jivefire.gif" width="860" /></div>
+<div align="center"><img alt="TubeViz Demo" src=".github/jivefire.gif" width="860" /></div>
 
-### What's Cooking
+### Enhanced Features
 
+- 🌈 **Synthwave Theme** - Beautiful purple→pink→cyan gradient coloring
+- 📊 **Logarithmic Frequency Binning** - Perceptually accurate 40Hz-18kHz distribution
+- 🎯 **Spike Prevention** - Smooth visualization without audio artifacts  
+- 🏃 **Velocity-Based Physics** - Natural peak motion with realistic decay
 - 🖼️ **Thumbnail generator** YouTube-style PNG with your title, saved alongside the video
 - 🎬 **1280×720 @ 30fps** H.264/AAC YouTube-ready MP4, no questions asked
   - 🎚️ **64 frequency bars** that actually look discrete (not that smeared spectrum nonsense)
   - 🪞 **Symmetric mirroring** above and below centre, doubles the visual impact
-  - 🔬 **FFT-based analysis** 2048-point Hanning window, log scale frequency binning
-  - ✨ **Smooth decay animation** à la CAVA-bars rise fast, fall gracefully
+  - 🔬 **FFT-based analysis** 2048-point Hanning window, logarithmic frequency binning
+  - ✨ **Smooth decay animation** - Velocity-based physics with natural motion
 - 🚀 **Stupidly fast** streaming pipeline, parallel RGB→YUV conversion
   - ⚡ **GPU acceleration** auto-detected: NVENC, Vulkan, VA-API, QuickSync, VideoToolbox
 - 📦 **Single binary** No Python. No FFmpeg install required. Just drop and render
@@ -24,14 +30,19 @@ Your podcast audio deserves more than a static image on YouTube. Jivefire transf
 
 ## Usage
 
-### Generate Video
+### Generate Video (Default Theme)
 ```bash
-./jivefire input.wav output.mp4
+./tubeviz input.wav output.mp4 --theme default
+```
+
+### Generate Video (Synthwave Theme)
+```bash
+./tubeviz input.wav output.mp4 --theme synthwave
 ```
 
 ### With Episode Number and Title
 ```bash
-./jivefire --episode=42 --title="Linux Matters" input.wav output.mp4
+./tubeviz --episode=42 --title="Linux Matters" input.wav output.mp4 --theme synthwave
 ```
 
 ### Example
@@ -44,7 +55,7 @@ Your podcast audio deserves more than a static image on YouTube. Jivefire transf
 
 ## Build
 
-Jivefire uses [ffmpeg-statigo](https://github.com/linuxmatters/ffmpeg-statigo) for FFmpeg static bindings.
+TubeViz uses [ffmpeg-statigo](https://github.com/linuxmatters/ffmpeg-statigo) for FFmpeg static bindings.
 
 ```bash
 # Setup or update ffmpeg-statigo submodule and library
@@ -56,10 +67,14 @@ just test         # Run tests
 just test-encoder # Test encoder
 ```
 
-## Why Jivefire?
+## Why TubeViz?
 
-FFmpeg's audio visualisation filters (`showfreqs`, `showspectrum`) render continuous frequency spectra, not discrete bars. No amount of FFmpeg filter chain kung-fu can achieve the discrete 64-bar aesthetic required for Linux Matters branding. Solution: Do the FFT analysis and bar rendering in Go, pipe frames to FFmpeg for encoding.
+FFmpeg's audio visualisation filters (`showfreqs`, `showspectrum`) render continuous frequency spectra, not discrete bars. No amount of FFmpeg filter chain kung-fu can achieve the discrete 64-bar aesthetic required for podcast branding. Solution: Do the FFT analysis and bar rendering in Go, pipe frames to FFmpeg for encoding.
 
-**Why Go over Python?** The original `djfun/audio-visualizer-python` tool is a moribund Qt5 GUI with significant tech debt. For our podcast production needs we wanted multi-archtitecture tools that's that can integrate into automation pipelines.
+**Why Go over Python?** The original `djfun/audio-visualizer-python` tool is a moribund Qt5 GUI with significant tech debt. For our podcast production needs we wanted multi-architecture tools that can integrate into automation pipelines.
 
-The Jivefire architecture, such as it is, is available in the [ARCHITECTURE.md](docs/ARCHITECTURE.md) document.
+The TubeViz architecture is available in the [ARCHITECTURE.md](docs/ARCHITECTURE.md) document.
+
+## Attribution
+
+TubeViz is based on [Jivefire](https://github.com/linuxmatters/jivefire) by Linux Matters, with visualization algorithm improvements inspired by [vibeviz](https://github.com/noblepayne/vibeviz). Licensed under GPL v3.
