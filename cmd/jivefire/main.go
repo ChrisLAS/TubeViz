@@ -369,6 +369,7 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 	prevBarHeights := make([]float64, config.NumBars)
 	velocityPeaks := make([]float64, config.NumBars)
 	velocityVals := make([]float64, config.NumBars)
+	seededBars := false
 
 	// Pre-allocate reusable buffers to avoid allocations in render loop
 	barHeights := make([]float64, config.NumBars)
@@ -472,12 +473,22 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		}
 
 		// Apply spike prevention to eliminate visual artifacts from sudden audio jumps
-		for i := range barHeights {
-			if barHeights[i] > prevBarHeights[i]*config.MaxAudioJump {
-				barHeights[i] = prevBarHeights[i] * config.MaxAudioJump
+		// Skip clamping until we've seen initial non-zero bar data.
+		hasNonZero := false
+		for _, height := range barHeights {
+			if height > 0 {
+				hasNonZero = true
+				break
 			}
-			if barHeights[i] < prevBarHeights[i]/config.MaxAudioJump {
-				barHeights[i] = prevBarHeights[i] / config.MaxAudioJump
+		}
+		if seededBars {
+			for i := range barHeights {
+				if barHeights[i] > prevBarHeights[i]*config.MaxAudioJump {
+					barHeights[i] = prevBarHeights[i] * config.MaxAudioJump
+				}
+				if barHeights[i] < prevBarHeights[i]/config.MaxAudioJump {
+					barHeights[i] = prevBarHeights[i] / config.MaxAudioJump
+				}
 			}
 		}
 
@@ -509,6 +520,9 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 			}
 
 			prevBarHeights[i] = currentHeight
+		}
+		if hasNonZero {
+			seededBars = true
 		}
 
 		// Rearrange frequencies for center-out distribution
