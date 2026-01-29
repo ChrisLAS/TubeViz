@@ -51,19 +51,19 @@
             tar -xzf ${ffmpegStatigoLib} -C third_party/ffmpeg-statigo/lib
           '';
           preBuild = ''
-            if [ ! -d vendor ]; then
+            if [ -d vendor ]; then
+              chmod -R u+w vendor
+
+              mkdir -p vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64
+              cp third_party/ffmpeg-statigo/lib/linux_amd64/libffmpeg.a \
+                vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64/
+
+              rm -rf vendor/github.com/linuxmatters/ffmpeg-statigo/include
+              cp -R third_party/ffmpeg-statigo/include \
+                vendor/github.com/linuxmatters/ffmpeg-statigo/include
+            else
               echo "vendor directory missing; skipping ffmpeg-statigo vendor patch"
-              exit 0
             fi
-            chmod -R u+w vendor
-
-            mkdir -p vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64
-            cp third_party/ffmpeg-statigo/lib/linux_amd64/libffmpeg.a \
-              vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64/
-
-            rm -rf vendor/github.com/linuxmatters/ffmpeg-statigo/include
-            cp -R third_party/ffmpeg-statigo/include \
-              vendor/github.com/linuxmatters/ffmpeg-statigo/include
           '';
           postInstall = ''
             mv "$out/bin/jivefire" "$out/bin/tubeviz"
