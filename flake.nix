@@ -21,14 +21,14 @@
         pkgs = nixpkgs.legacyPackages.${system};
         version = self.shortRev or "dev";
         ffmpegStatigoLib = pkgs.fetchurl {
-          url = "https://github.com/linuxmatters/ffmpeg-statigo/releases/download/lib-8.0.1.0/ffmpeg-linux-amd64.tar.gz";
+          url = "https://github.com/ChrisLAS/ffmpeg-statigo-mirror/releases/download/lib-8.0.1.0/ffmpeg-linux-amd64.tar.gz";
           hash = "sha256-nfakHmdmb++pR7ridXo2QN/V47p9KsVwfI0uo71Pkbk=";
         };
         ffmpegStatigoSrc = pkgs.fetchFromGitHub {
-          owner = "linuxmatters";
-          repo = "ffmpeg-statigo";
+          owner = "ChrisLAS";
+          repo = "ffmpeg-statigo-mirror";
           rev = "4b9e3969d5e2d7140db5743b9c42b525110920bf";
-          hash = "sha256-xkuvggFPnKv8d/0A7yCuGTw/48MAOCabHFMW6i920Rs=";
+              hash = "sha256-xkuvggFPnKv8d/0A7yCuGTw/48MAOCabHFMW6i920Rs=";
         };
       in
       {
