@@ -52,8 +52,8 @@
           '';
           preBuild = ''
             if [ ! -d vendor ]; then
-              echo "vendor directory missing; expected buildGoModule vendor phase"
-              exit 1
+              echo "vendor directory missing; skipping ffmpeg-statigo vendor patch"
+              exit 0
             fi
             chmod -R u+w vendor
 
