@@ -1,3 +1,14 @@
 .direnv
 jivefire
+tubeviz
 testdata/
+
+# Test media files (keep repo lean)
+*.mp4
+*.flac
+*.jpg
+*.png
+# Exception: preserve .github/ assets
+!.github/**/*.png
+!.github/**/*.jpg
+!.github/**/*.gif
