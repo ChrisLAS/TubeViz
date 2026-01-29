@@ -12,21 +12,13 @@ Your podcast audio deserves more than a static image on YouTube. TubeViz transfo
 
 ### Enhanced Features
 
-- 🌈 **Synthwave Theme** - Beautiful purple→pink→cyan gradient coloring
-- 📊 **Logarithmic Frequency Binning** - Perceptually accurate 40Hz-18kHz distribution
-- 🎯 **Spike Prevention** - Smooth visualization without audio artifacts  
-- 🏃 **Velocity-Based Physics** - Natural peak motion with realistic decay
-- 🖼️ **Thumbnail generator** YouTube-style PNG with your title, saved alongside the video
-- 🎬 **1280×720 @ 30fps** H.264/AAC YouTube-ready MP4, no questions asked
-  - 🎚️ **64 frequency bars** that actually look discrete (not that smeared spectrum nonsense)
-  - 🪞 **Symmetric mirroring** above and below centre, doubles the visual impact
-  - 🔬 **FFT-based analysis** 2048-point Hanning window, logarithmic frequency binning
-  - ✨ **Smooth decay animation** - Velocity-based physics with natural motion
-- 🚀 **Stupidly fast** streaming pipeline, parallel RGB→YUV conversion
-  - ⚡ **GPU acceleration** auto-detected: NVENC, Vulkan, VA-API, QuickSync, VideoToolbox
-- 📦 **Single binary** No Python. No FFmpeg install required. Just drop and render
-  - 🐧 **Linux** (amd64 and aarch64)
-  - 🍏 **macOS** (x86 and Apple Silicon)
+- 🎬 **Two-pass streaming pipeline** for accurate scaling with low memory use
+- 🌈 **Synthwave theme** with purple→pink→cyan gradient bars
+- 🎚️ **64 discrete bars** with logarithmic 40Hz–18kHz binning
+- 🏃 **Velocity-based decay** that prevents spikes and keeps motion natural
+- 🖼️ **Thumbnail generator** for YouTube-style episode art
+- ⚡ **Parallel RGB→YUV conversion** with auto-detected GPU acceleration
+- 📦 **Single static binary** with bundled FFmpeg (Linux amd64/aarch64, macOS Intel/Apple Silicon)
 
 ## Usage
 
@@ -48,9 +40,7 @@ Your podcast audio deserves more than a static image on YouTube. TubeViz transfo
 ### Example
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=VPJEQhdaXrk" target="_blank">
-    <img alt="Linux Matters: Episode 65 (macOS Made Me Snap)" src=".github/thumbnail.png" width="640">
-  </a>
+  <img alt="Linux Matters: Episode 65 (macOS Made Me Snap)" src=".github/thumbnail.png" width="640">
 </div>
 
 ## Build
