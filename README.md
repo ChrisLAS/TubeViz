@@ -34,7 +34,7 @@ TubeViz turns plain audio into motion. Feed it WAV, MP3, or FLAC and get 720p vi
 
 ### With Episode Number and Title
 ```bash
-./tubeviz --episode=42 --title="Linux Matters" input.wav output.mp4 --theme synthwave
+./tubeviz --episode=42 --title="This Week in Bitcoin" input.wav output.mp4 --theme synthwave
 ```
 
 ## Build
