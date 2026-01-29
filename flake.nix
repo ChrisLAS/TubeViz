@@ -4,10 +4,6 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    ffmpeg-statigo = {
-      url = "github:linuxmatters/ffmpeg-statigo";
-      flake = false;
-    };
   };
 
   outputs =
@@ -15,9 +11,11 @@
       self,
       nixpkgs,
       flake-utils,
-      ffmpeg-statigo,
     }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" ] (
+    let
+      supportedSystems = [ "x86_64-linux" ]; # ffmpeg-statigo ships linux_amd64 static libs
+    in
+    flake-utils.lib.eachSystem supportedSystems (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -26,6 +24,12 @@
           url = "https://github.com/linuxmatters/ffmpeg-statigo/releases/download/lib-8.0.1.0/ffmpeg-linux-amd64.tar.gz";
           hash = "sha256-nfakHmdmb++pR7ridXo2QN/V47p9KsVwfI0uo71Pkbk=";
         };
+        ffmpegStatigoSrc = pkgs.fetchFromGitHub {
+          owner = "linuxmatters";
+          repo = "ffmpeg-statigo";
+          rev = "4b9e3969d5e2d7140db5743b9c42b525110920bf";
+          hash = "sha256-xkuvggFPnKv8d/0A7yCuGTw/48MAOCabHFMW6i920Rs=";
+        };
       in
       {
         packages.tubeviz = pkgs.buildGoModule {
@@ -33,27 +37,36 @@
           inherit version;
           src = self;
           subPackages = [ "cmd/jivefire" ];
+          # Update with `nix build .#tubeviz` when deps change.
           vendorHash = "sha256-ZQi5efJlY9fNRDtR8oA2Fm/bM2MyG7nIk7uypv2dzC8=";
           ldflags = [ "-X main.version=${version}" ];
-          buildInputs = [ pkgs.ffmpeg-full ];
           nativeBuildInputs = [ pkgs.pkg-config pkgs.gnutar ];
           doCheck = false;
-          preBuild = ''
+          postPatch = ''
+            rm -rf third_party/ffmpeg-statigo
             mkdir -p third_party
-            cp -R ${ffmpeg-statigo} third_party/ffmpeg-statigo
+            cp -R ${ffmpegStatigoSrc} third_party/ffmpeg-statigo
             chmod -R u+w third_party/ffmpeg-statigo
             mkdir -p third_party/ffmpeg-statigo/lib
             tar -xzf ${ffmpegStatigoLib} -C third_party/ffmpeg-statigo/lib
+          '';
+          preBuild = ''
+            if [ ! -d vendor ]; then
+              echo "vendor directory missing; expected buildGoModule vendor phase"
+              exit 1
+            fi
+            chmod -R u+w vendor
 
-            chmod -R u+w vendor || true
             mkdir -p vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64
             cp third_party/ffmpeg-statigo/lib/linux_amd64/libffmpeg.a \
               vendor/github.com/linuxmatters/ffmpeg-statigo/lib/linux_amd64/
+
+            rm -rf vendor/github.com/linuxmatters/ffmpeg-statigo/include
+            cp -R third_party/ffmpeg-statigo/include \
+              vendor/github.com/linuxmatters/ffmpeg-statigo/include
           '';
           postInstall = ''
-            if [ -f "$out/bin/jivefire" ]; then
-              mv "$out/bin/jivefire" "$out/bin/tubeviz"
-            fi
+            mv "$out/bin/jivefire" "$out/bin/tubeviz"
           '';
           meta.mainProgram = "tubeviz";
         };
