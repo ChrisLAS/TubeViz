@@ -44,7 +44,7 @@ var CLI struct {
 
 func main() {
 	ctx := kong.Parse(&CLI,
-		kong.Name("jivefire"),
+		kong.Name("tubeviz"),
 		kong.Description("TubeViz turns podcast audio into a groovy MP4 visualiser."),
 		kong.Vars{"version": version},
 		kong.UsageOnError(),
