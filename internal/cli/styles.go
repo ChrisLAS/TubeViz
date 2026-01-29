@@ -11,7 +11,7 @@ import (
 
 // Color palette
 var (
-	primaryColor   = lipgloss.Color("#A40000") // Jivefire red
+	primaryColor   = lipgloss.Color("#F7931A") // Bitcoin orange
 	accentColor    = lipgloss.Color("#FFA500") // Orange/gold
 	successColor   = lipgloss.Color("#00AA00") // Green
 	mutedColor     = lipgloss.Color("#888888") // Gray
@@ -73,7 +73,7 @@ var (
 
 // PrintBanner prints the application banner
 func PrintBanner() {
-	banner := TitleStyle.Render("Jivefire 🔥")
+	banner := TitleStyle.Render("TubeViz 📺")
 	subtitle := SubtitleStyle.Render("Spin your podcast .wav into a groovy MP4 visualiser with Cava-inspired real-time audio frequencies.")
 	fmt.Println(banner)
 	fmt.Println(subtitle)
@@ -82,7 +82,7 @@ func PrintBanner() {
 
 // PrintVersion prints version information
 func PrintVersion(version string) {
-	fmt.Println(TitleStyle.Render("Jivefire 🔥"))
+	fmt.Println(TitleStyle.Render("TubeViz 📺"))
 	fmt.Printf("%s %s\n", KeyStyle.Render("Version:"), ValueStyle.Render(version))
 }
 
@@ -95,7 +95,7 @@ type EncoderInfo struct {
 
 // PrintHardwareProbe prints a styled hardware encoder probe result
 func PrintHardwareProbe(encoders []EncoderInfo) {
-	fmt.Println(TitleStyle.Render("Jivefire 🔥"))
+	fmt.Println(TitleStyle.Render("TubeViz 📺"))
 	fmt.Println(HeaderStyle.Render("Hardware Encoder Probe"))
 
 	for _, enc := range encoders {

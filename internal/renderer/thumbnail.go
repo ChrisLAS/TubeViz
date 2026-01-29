@@ -6,8 +6,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"math"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golang/freetype"
@@ -15,14 +15,28 @@ import (
 	"github.com/linuxmatters/jivefire/internal/config"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/font"
-	"golang.org/x/image/math/f64"
 	"golang.org/x/image/math/fixed"
+
+	_ "image/jpeg"
+	_ "image/png"
 )
 
 // getThumbnailTextColor returns the text color for thumbnail (uses runtime config or default)
 func getThumbnailTextColor(runtimeConfig *config.RuntimeConfig) color.RGBA {
-	r, g, b := runtimeConfig.GetTextColor()
-	return color.RGBA{R: r, G: g, B: b, A: 255}
+	return color.RGBA{
+		R: config.ThumbnailTextColorR,
+		G: config.ThumbnailTextColorG,
+		B: config.ThumbnailTextColorB,
+		A: 255,
+	}
+}
+
+func getThumbnailShadowColor() color.RGBA {
+	return color.RGBA{R: 0, G: 0, B: 0, A: config.ThumbnailShadowAlpha}
+}
+
+func getThumbnailGlowColor() color.RGBA {
+	return color.RGBA{R: config.TextColorR, G: config.TextColorG, B: config.TextColorB, A: config.ThumbnailGlowAlpha}
 }
 
 // GenerateThumbnail creates a YouTube thumbnail with the title text overlaid
@@ -49,7 +63,9 @@ func GenerateThumbnail(outputPath string, title string, runtimeConfig *config.Ru
 	line1, line2 := splitTitle(title)
 
 	// Find the largest font size that fits within constraints
-	fontSize := findOptimalFontSize(parsedFont, line1, line2)
+	boxWidth := config.ThumbnailBoxRight - config.ThumbnailBoxLeft
+	boxHeight := config.ThumbnailBoxBottom - config.ThumbnailBoxTop
+	fontSize := findOptimalFontSize(parsedFont, line1, line2, boxWidth, boxHeight)
 
 	// Create font face with optimal size
 	face := truetype.NewFace(parsedFont, &truetype.Options{
@@ -81,15 +97,20 @@ func loadThumbnailBackground(runtimeConfig *config.RuntimeConfig) (*image.RGBA, 
 		// Load from filesystem
 		data, err = os.ReadFile(imagePath)
 	} else {
-		// Load from embedded assets
-		data, err = embeddedAssets.ReadFile(imagePath)
+		// Prefer on-disk assets for local overrides, fallback to embedded assets
+		diskPath := filepath.Join("internal", "renderer", imagePath)
+		if _, statErr := os.Stat(diskPath); statErr == nil {
+			data, err = os.ReadFile(diskPath)
+		} else {
+			data, err = embeddedAssets.ReadFile(imagePath)
+		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	img, err := png.Decode(bytes.NewReader(data))
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
@@ -127,14 +148,10 @@ func splitTitle(title string) (string, string) {
 	return line1, line2
 }
 
-// findOptimalFontSize finds the largest font size that fits within constraints
-// Constraints:
-// - ThumbnailMargin from left and right edges
-// - Line 1 starts at top margin (ThumbnailMargin)
-// - Bottom edge of line 2 must not extend below center line (y=360)
-func findOptimalFontSize(parsedFont *truetype.Font, line1, line2 string) float64 {
-	centerY := config.Height / 2
-	maxWidth := config.Width - (2 * config.ThumbnailMargin)
+// findOptimalFontSize finds the largest font size that fits within the title box.
+func findOptimalFontSize(parsedFont *truetype.Font, line1, line2 string, boxWidth, boxHeight int) float64 {
+	maxWidth := boxWidth - (2 * config.ThumbnailBoxPadding)
+	maxHeight := boxHeight - (2 * config.ThumbnailBoxPadding)
 
 	// Start with a large size and reduce until it fits
 	for size := 150.0; size > 10.0; size -= 2.0 {
@@ -166,10 +183,9 @@ func findOptimalFontSize(parsedFont *truetype.Font, line1, line2 string) float64
 		// Line 1 bottom: margin + height1
 		// Line 2 top: margin + height1 + lineSpacing
 		// Line 2 bottom: margin + height1 + lineSpacing + height2
-		line2Bottom := config.ThumbnailMargin + height1 + lineSpacing + height2
-
-		// Check if line 2 bottom fits above center line
-		if line2Bottom <= centerY {
+		// Check if text block fits within the box
+		totalHeight := height1 + lineSpacing + height2
+		if width1 <= maxWidth && width2 <= maxWidth && totalHeight <= maxHeight {
 			return size
 		}
 	}
@@ -186,19 +202,16 @@ func measureText(face font.Face, text string) (int, fixed.Rectangle26_6) {
 	return width, bounds
 }
 
-// drawThumbnailText draws the title text on the thumbnail with a slight rotation
-// Line 1 is top-aligned at the ThumbnailMargin
-// Bottom edge of line 2 must not extend below center line
-// Text is rotated ThumbnailTextRotationDegrees clockwise for dynamic effect
+// drawThumbnailText draws the title text centred within the thumbnail box.
 func drawThumbnailText(img *image.RGBA, face font.Face, line1, line2 string, runtimeConfig *config.RuntimeConfig) {
 	// Measure text dimensions - bounds.Min.Y is negative (ascent), bounds.Max.Y is positive (descent)
 	width1, bounds1 := measureText(face, line1)
 	width2, bounds2 := measureText(face, line2)
 
-	// Calculate line spacing (50% of font size for more vertical spacing)
+	// Calculate line spacing (35% of font size for tighter stacking)
 	metrics := face.Metrics()
 	fontSize := float64(metrics.Height) / 64.0 // Convert from fixed.Int26_6 to float64
-	lineSpacing := int(fontSize * 0.5)
+	lineSpacing := int(fontSize * 0.35)
 
 	// Calculate the height of each line (from visual top to visual bottom)
 	height1 := (bounds1.Max.Y - bounds1.Min.Y).Ceil()
@@ -211,95 +224,42 @@ func drawThumbnailText(img *image.RGBA, face font.Face, line1, line2 string, run
 	}
 	totalHeight := height1 + lineSpacing + height2
 
-	// Create a temporary image for drawing text (larger to accommodate rotation)
-	// Use 1.5x size to ensure no clipping during rotation
-	tempSize := int(float64(maxWidth+totalHeight) * 1.5)
-	tempImg := image.NewRGBA(image.Rect(0, 0, tempSize, tempSize))
+	// Position text block centred within the thumbnail box.
+	boxLeft := config.ThumbnailBoxLeft
+	boxTop := config.ThumbnailBoxTop
+	boxRight := config.ThumbnailBoxRight
+	boxBottom := config.ThumbnailBoxBottom
+	boxWidth := boxRight - boxLeft
+	boxHeight := boxBottom - boxTop
+	centerY := boxTop + boxHeight/2
+	line1VisualTop := centerY - totalHeight/2
+	line1BaselineY := line1VisualTop - bounds1.Min.Y.Ceil()
 
-	// Draw text on temporary image, centered
-	// The baseline is where DrawString draws. The visual top is baseline + bounds.Min.Y (Min.Y is negative)
-	tempCenterY := tempSize / 2
-
-	// Position line 1: we want the text block centered, so calculate baseline positions
-	// Text block spans from (center - totalHeight/2) to (center + totalHeight/2)
-	// Line 1's visual top should be at (center - totalHeight/2)
-	// Since visual top = baseline + bounds1.Min.Y, we get: baseline = visualTop - bounds1.Min.Y
-	line1VisualTop := tempCenterY - totalHeight/2
-	line1BaselineY := line1VisualTop - bounds1.Min.Y.Ceil() // Min.Y is negative, so this adds to visualTop
-
-	// Line 2's visual top is line1VisualTop + height1 + lineSpacing
 	line2VisualTop := line1VisualTop + height1 + lineSpacing
 	line2BaselineY := line2VisualTop - bounds2.Min.Y.Ceil()
 
-	drawCenteredLineOnTemp(tempImg, face, line1, tempSize, line1BaselineY, runtimeConfig)
-	drawCenteredLineOnTemp(tempImg, face, line2, tempSize, line2BaselineY, runtimeConfig)
+	// Draw a soft glow layer first, then shadow, then text.
+	glowImg := image.NewRGBA(img.Bounds())
+	drawCenteredLineWithColor(glowImg, face, line1, boxWidth, boxLeft, line1BaselineY, getThumbnailGlowColor())
+	drawCenteredLineWithColor(glowImg, face, line2, boxWidth, boxLeft, line2BaselineY, getThumbnailGlowColor())
+	blurredGlow := blurRGBA(glowImg, config.ThumbnailGlowBlurRadius)
+	draw.Draw(img, img.Bounds(), blurredGlow, image.Point{}, draw.Over)
 
-	// Create rotation matrix for thumbnail text rotation (clockwise)
-	angle := -config.ThumbnailTextRotationDegrees * math.Pi / 180.0 // Negative for clockwise
-	cos := math.Cos(angle)
-	sin := math.Sin(angle)
-
-	// Center of rotation (center of temp image)
-	cx := float64(tempSize) / 2.0
-	cy := float64(tempSize) / 2.0
-
-	// Create affine transformation matrix
-	// Translate to origin, rotate, translate back
-	m := f64.Aff3{
-		cos, -sin, cx - cos*cx + sin*cy,
-		sin, cos, cy - sin*cx - cos*cy,
-	}
-
-	// Create destination image for rotated text
-	rotatedImg := image.NewRGBA(tempImg.Bounds())
-
-	// Apply rotation
-	draw.BiLinear.Transform(rotatedImg, m, tempImg, tempImg.Bounds(), draw.Over, nil)
-
-	// Calculate the position to composite rotated text onto thumbnail
-	// For a clockwise rotation, the highest point will be the top-right corner of line 1
-
-	// Line 1's visual top in tempImg coordinates
-	line1Top := float64(line1VisualTop)
-
-	// Get the right edge of line 1
-	line1Right := cx + float64(width1)/2.0
-
-	// This is the point that will be highest after clockwise rotation
-	topRightX := line1Right - cx // Relative to rotation center
-	topRightY := line1Top - cy   // Relative to rotation center
-
-	// Apply rotation to find where this point ends up
-	// For clockwise rotation: y' = x*sin + y*cos
-	rotatedTopY := sin*topRightX + cos*topRightY
-
-	// Translate back to tempImg coordinates
-	highestPointY := rotatedTopY + cy
-
-	// Position the rotated text block centered horizontally
-	destX := (config.Width - tempSize) / 2
-
-	// For vertical positioning:
-	// highestPointY is the highest point of the rotated text in tempImg coordinates
-	// We want this highest point to align with config.ThumbnailMargin in the final image
-	// So: destY + highestPointY = config.ThumbnailMargin
-	// Therefore: destY = config.ThumbnailMargin - highestPointY
-	destY := int(float64(config.ThumbnailMargin) - highestPointY)
-
-	// Composite rotated text onto thumbnail
-	destRect := image.Rect(destX, destY, destX+tempSize, destY+tempSize)
-	draw.Draw(img, destRect, rotatedImg, image.Point{}, draw.Over)
+	drawCenteredLineWithColor(img, face, line1, boxWidth, boxLeft, line1BaselineY, getThumbnailShadowColor())
+	drawCenteredLineWithColor(img, face, line2, boxWidth, boxLeft, line2BaselineY, getThumbnailShadowColor())
+	drawCenteredLineWithColor(img, face, line1, boxWidth, boxLeft, line1BaselineY, getThumbnailTextColor(runtimeConfig))
+	drawCenteredLineWithColor(img, face, line2, boxWidth, boxLeft, line2BaselineY, getThumbnailTextColor(runtimeConfig))
 }
 
-// drawCenteredLineOnTemp draws a line of text centered on a temporary image
-func drawCenteredLineOnTemp(img *image.RGBA, face font.Face, text string, imgWidth, baselineY int, runtimeConfig *config.RuntimeConfig) {
+// drawCenteredLineWithColor draws a line of text centred on the target image.
+func drawCenteredLineWithColor(img *image.RGBA, face font.Face, text string, boxWidth, boxLeft, baselineY int, textColor color.RGBA) {
 	if text == "" {
 		return
 	}
 
 	d := &font.Drawer{
 		Dst:  img,
-		Src:  image.NewUniform(getThumbnailTextColor(runtimeConfig)),
+		Src:  image.NewUniform(textColor),
 		Face: face,
 	}
 
@@ -308,10 +268,118 @@ func drawCenteredLineOnTemp(img *image.RGBA, face font.Face, text string, imgWid
 	textWidth := (bounds.Max.X - bounds.Min.X).Ceil()
 
 	// Center horizontally
-	x := (imgWidth - textWidth) / 2
+	x := boxLeft + (boxWidth-textWidth)/2
 
 	d.Dot = freetype.Pt(x, baselineY)
 	d.DrawString(text)
+}
+
+func blurRGBA(src *image.RGBA, radius int) *image.RGBA {
+	if radius <= 0 {
+		return src
+	}
+
+	bounds := src.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+	stride := src.Stride
+	tmp := image.NewRGBA(bounds)
+	dst := image.NewRGBA(bounds)
+
+	// Horizontal pass.
+	for y := 0; y < height; y++ {
+		row := y * stride
+		var sumR, sumG, sumB, sumA int
+		window := 0
+		for x := -radius; x <= radius; x++ {
+			ix := x
+			if ix < 0 {
+				ix = 0
+			} else if ix >= width {
+				ix = width - 1
+			}
+			idx := row + ix*4
+			sumR += int(src.Pix[idx])
+			sumG += int(src.Pix[idx+1])
+			sumB += int(src.Pix[idx+2])
+			sumA += int(src.Pix[idx+3])
+			window++
+		}
+		for x := 0; x < width; x++ {
+			idx := row + x*4
+			tmp.Pix[idx] = uint8(sumR / window)
+			tmp.Pix[idx+1] = uint8(sumG / window)
+			tmp.Pix[idx+2] = uint8(sumB / window)
+			tmp.Pix[idx+3] = uint8(sumA / window)
+
+			left := x - radius
+			right := x + radius + 1
+			if left >= 0 {
+				lidx := row + left*4
+				sumR -= int(src.Pix[lidx])
+				sumG -= int(src.Pix[lidx+1])
+				sumB -= int(src.Pix[lidx+2])
+				sumA -= int(src.Pix[lidx+3])
+				window--
+			}
+			if right < width {
+				ridx := row + right*4
+				sumR += int(src.Pix[ridx])
+				sumG += int(src.Pix[ridx+1])
+				sumB += int(src.Pix[ridx+2])
+				sumA += int(src.Pix[ridx+3])
+				window++
+			}
+		}
+	}
+
+	// Vertical pass.
+	for x := 0; x < width; x++ {
+		var sumR, sumG, sumB, sumA int
+		window := 0
+		for y := -radius; y <= radius; y++ {
+			iy := y
+			if iy < 0 {
+				iy = 0
+			} else if iy >= height {
+				iy = height - 1
+			}
+			idx := iy*stride + x*4
+			sumR += int(tmp.Pix[idx])
+			sumG += int(tmp.Pix[idx+1])
+			sumB += int(tmp.Pix[idx+2])
+			sumA += int(tmp.Pix[idx+3])
+			window++
+		}
+		for y := 0; y < height; y++ {
+			idx := y*stride + x*4
+			dst.Pix[idx] = uint8(sumR / window)
+			dst.Pix[idx+1] = uint8(sumG / window)
+			dst.Pix[idx+2] = uint8(sumB / window)
+			dst.Pix[idx+3] = uint8(sumA / window)
+
+			top := y - radius
+			bottom := y + radius + 1
+			if top >= 0 {
+				tidx := top*stride + x*4
+				sumR -= int(tmp.Pix[tidx])
+				sumG -= int(tmp.Pix[tidx+1])
+				sumB -= int(tmp.Pix[tidx+2])
+				sumA -= int(tmp.Pix[tidx+3])
+				window--
+			}
+			if bottom < height {
+				bidx := bottom*stride + x*4
+				sumR += int(tmp.Pix[bidx])
+				sumG += int(tmp.Pix[bidx+1])
+				sumB += int(tmp.Pix[bidx+2])
+				sumA += int(tmp.Pix[bidx+3])
+				window++
+			}
+		}
+	}
+
+	return dst
 }
 
 // saveThumbnail saves the thumbnail image to a PNG file

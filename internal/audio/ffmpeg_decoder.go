@@ -107,9 +107,15 @@ func NewFFmpegDecoder(filename string) (*FFmpegDecoder, error) {
 		return nil, fmt.Errorf("failed to open codec: error code %d", ret)
 	}
 
-	// Store audio properties
-	d.sampleRate = d.codecCtx.SampleRate()
-	d.channels = d.codecCtx.ChLayout().NbChannels()
+	// Store audio properties from stream parameters (more reliable before decoding)
+	d.sampleRate = int(audioStream.Codecpar().SampleRate())
+	d.channels = audioStream.Codecpar().ChLayout().NbChannels()
+	if d.sampleRate == 0 {
+		d.sampleRate = d.codecCtx.SampleRate()
+	}
+	if d.channels == 0 {
+		d.channels = d.codecCtx.ChLayout().NbChannels()
+	}
 
 	// Validate format support
 	sampleFmt := int32(d.codecCtx.SampleFmt())

@@ -32,8 +32,9 @@ var CLI struct {
 	Channels        int    `help:"Audio channels in MP4: 1 (mono) or 2 (stereo)" default:"1"`
 	BarColor        string `help:"Bar color in hex format (e.g., #A40000 or A40000)"`
 	TextColor       string `help:"Text color in hex format (e.g., #F8B31D or F8B31D)"`
-	BackgroundImage string `help:"Path to custom background image (PNG, 1280x720)"`
-	ThumbnailImage  string `help:"Path to custom thumbnail image (PNG, 1280x720)"`
+	BackgroundImage string `help:"Path to custom background image (PNG/JPEG, 1280x720)"`
+	ThumbnailImage  string `help:"Path to custom thumbnail image (PNG/JPEG, 1280x720)"`
+	ShowEpisode     bool   `help:"Show episode number overlay"`
 	NoPreview       bool   `help:"Disable video preview during encoding"`
 	Encoder         string `help:"Video encoder: auto, nvenc, qsv, vaapi, vulkan, software" default:"auto"`
 	Theme           string `help:"Visualization theme: default, synthwave" default:"synthwave"`
@@ -206,7 +207,12 @@ func generateVideo(inputFile string, outputFile string, channels int, noPreview 
 	// Track overall timing from the very start
 	overallStartTime := time.Now()
 
-	thumbnailPath := strings.Replace(outputFile, ".mp4", ".png", 1)
+	thumbnailPath := outputFile
+	if strings.HasSuffix(strings.ToLower(outputFile), ".mp4") {
+		thumbnailPath = outputFile[:len(outputFile)-4] + ".png"
+	} else {
+		thumbnailPath = outputFile + ".png"
+	}
 	thumbnailStartTime := time.Now()
 	if err := renderer.GenerateThumbnail(thumbnailPath, CLI.Title, runtimeConfig); err != nil {
 		cli.PrintError(fmt.Sprintf("failed to generate thumbnail: %v", err))
@@ -222,7 +228,7 @@ func generateVideo(inputFile string, outputFile string, channels int, noPreview 
 	}
 
 	// Calculate estimated total frames for Pass 1 progress
-	samplesPerFrame := config.SampleRate / config.FPS
+	samplesPerFrame := metadata.SampleRate / config.FPS
 	estimatedTotalFrames := int(metadata.NumSamples) / samplesPerFrame
 
 	// Create unified Bubbletea program for both passes
@@ -334,15 +340,20 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		bgImage = nil
 	}
 
-	// Load font for center text (embedded)
-	fontFace, err := renderer.LoadFont(48)
+	// Load fonts for overlays (embedded)
+	titleFace, err := renderer.LoadTitleFont(48)
 	if err != nil {
-		fontFace = nil
+		titleFace = nil
+	}
+	episodeFace, err := renderer.LoadEpisodeFont(48)
+	if err != nil {
+		episodeFace = nil
 	}
 
 	// Create audio processor and frame renderer
 	processor := audio.NewProcessor()
-	frame := renderer.NewFrame(bgImage, fontFace, CLI.Episode, CLI.Title, runtimeConfig)
+	showEpisode := CLI.Episode > 0 && CLI.ShowEpisode
+	frame := renderer.NewFrame(bgImage, titleFace, episodeFace, CLI.Episode, showEpisode, CLI.Title, runtimeConfig)
 
 	// Calculate frames from profile
 	numFrames := profile.NumFrames
@@ -379,12 +390,30 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 	sensitivity := 1.0
 
 	// Sliding buffer for FFT: we read samplesPerFrame but need FFTSize for FFT
-	samplesPerFrame := config.SampleRate / config.FPS
+	samplesPerFrame := reader.SampleRate() / config.FPS
 	fftBuffer := make([]float64, config.FFTSize)
 
 	// Pre-allocate reusable buffers for audio processing (avoid per-frame allocations)
 	newSamples := make([]float64, 0, samplesPerFrame)
-	audioSamples := make([]float32, samplesPerFrame)
+	audioSamples := make([]float32, samplesPerFrame*channels)
+
+	// Fill audioSamples with interleaved output samples and return sample count.
+	// Input samples are mono; stereo output duplicates to L/R.
+	fillAudioSamples := func(dst []float32, src []float64, channels int) int {
+		if channels == 2 {
+			for i, s := range src {
+				v := float32(s)
+				idx := i * 2
+				dst[idx] = v
+				dst[idx+1] = v
+			}
+			return len(src) * 2
+		}
+		for i, s := range src {
+			dst[i] = float32(s)
+		}
+		return len(src)
+	}
 
 	// Pre-fill buffer with first chunk
 	// Keep reading until we get the requested number of samples or EOF
@@ -412,11 +441,12 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 
 	// Write initial audio samples to encoder (first samplesPerFrame worth)
 	// This corresponds to the audio for frame 0
-	initialAudioSamples := make([]float32, samplesPerFrame)
-	for i := 0; i < samplesPerFrame && i < len(initialSamples); i++ {
-		initialAudioSamples[i] = float32(initialSamples[i])
+	initialCount := len(initialSamples)
+	if initialCount > samplesPerFrame {
+		initialCount = samplesPerFrame
 	}
-	if err := enc.WriteAudioSamples(initialAudioSamples); err != nil {
+	written := fillAudioSamples(audioSamples, initialSamples[:initialCount], channels)
+	if err := enc.WriteAudioSamples(audioSamples[:written]); err != nil {
 		cli.PrintError(fmt.Sprintf("error writing initial audio: %v", err))
 		p.Quit()
 		return
@@ -435,7 +465,7 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		coeffs := processor.ProcessChunk(chunk)
 
 		// Compute magnitudes and bin into bars using optimal baseScale from Pass 1
-		audio.BinFFT(coeffs, sensitivity, profile.OptimalBaseScale, barHeights)
+		audio.BinFFT(coeffs, reader.SampleRate(), sensitivity, profile.OptimalBaseScale, barHeights)
 
 		// CAVA-style auto-sensitivity with soft knee compression
 		overshootDetected := false
@@ -488,6 +518,7 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		// Apply velocity-based peak physics (vibeviz-style)
 		for i := range barHeights {
 			currentHeight := barHeights[i]
+			prevHeight := prevBarHeights[i]
 
 			if currentHeight > velocityPeaks[i]+config.PeakThreshold {
 				// New peak detected
@@ -510,6 +541,11 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 			if currentHeight > availableHeight {
 				overshoot := currentHeight - availableHeight
 				currentHeight = availableHeight + overshoot*math.Exp(-overshoot/availableHeight)
+			}
+
+			// CAVA-style smoothing on the decay to reduce jitter
+			if currentHeight < prevHeight {
+				currentHeight = prevHeight*config.DecaySmoothing + currentHeight*(1-config.DecaySmoothing)
 			}
 
 			prevBarHeights[i] = currentHeight
@@ -603,10 +639,8 @@ func runPass2(p *tea.Program, inputFile string, outputFile string, channels int,
 		// Write audio samples for this frame to encoder
 		// Convert float64 samples to float32 for AAC encoder
 		// Uses pre-allocated audioSamples buffer, slice to actual length
-		for i, s := range newSamples {
-			audioSamples[i] = float32(s)
-		}
-		if err := enc.WriteAudioSamples(audioSamples[:len(newSamples)]); err != nil {
+		written = fillAudioSamples(audioSamples, newSamples, channels)
+		if err := enc.WriteAudioSamples(audioSamples[:written]); err != nil {
 			cli.PrintError(fmt.Sprintf("error writing audio at frame %d: %v", frameNum, err))
 			p.Quit()
 			return

@@ -206,7 +206,7 @@ func TestAnalyzeFrameDirectly(t *testing.T) {
 	coeffs := processor.ProcessChunk(testSamples)
 
 	// Analyze
-	analysis := analyzeFrame(coeffs, testSamples)
+	analysis := analyzeFrame(coeffs, testSamples, config.SampleRate)
 
 	// Validate results
 	if analysis.PeakMagnitude <= 0 {

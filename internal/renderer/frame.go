@@ -12,17 +12,19 @@ import (
 
 // Frame represents a single video frame with visualization bars
 type Frame struct {
-	img        *image.RGBA
-	bgImage    *image.RGBA
-	fontFace   font.Face
-	centerY    int
-	startX     int
-	totalWidth int
+	img         *image.RGBA
+	bgImage     *image.RGBA
+	titleFace   font.Face
+	episodeFace font.Face
+	centerY     int
+	startX      int
+	totalWidth  int
 
 	// Text overlay
-	episodeNum string
-	title      string
-	textColor  color.RGBA // Text color for overlays
+	episodeNum  string
+	showEpisode bool
+	title       string
+	textColor   color.RGBA // Text color for overlays
 
 	// Pre-computed values
 	maxBarHeight    int
@@ -43,7 +45,7 @@ var framePool = sync.Pool{
 }
 
 // NewFrame creates a new optimized frame renderer
-func NewFrame(bgImage *image.RGBA, fontFace font.Face, episodeNum int, title string, runtimeConfig *config.RuntimeConfig) *Frame {
+func NewFrame(bgImage *image.RGBA, titleFace font.Face, episodeFace font.Face, episodeNum int, showEpisode bool, title string, runtimeConfig *config.RuntimeConfig) *Frame {
 	totalWidth := config.NumBars*config.BarWidth + (config.NumBars-1)*config.BarGap
 	startX := (config.Width - totalWidth) / 2
 	centerY := config.Height / 2
@@ -99,11 +101,13 @@ func NewFrame(bgImage *image.RGBA, fontFace font.Face, episodeNum int, title str
 	f := &Frame{
 		img:             framePool.Get().(*image.RGBA),
 		bgImage:         bgImage,
-		fontFace:        fontFace,
+		titleFace:       titleFace,
+		episodeFace:     episodeFace,
 		centerY:         centerY,
 		startX:          startX,
 		totalWidth:      totalWidth,
 		episodeNum:      episodeStr,
+		showEpisode:     showEpisode,
 		title:           title,
 		textColor:       color.RGBA{R: textR, G: textG, B: textB, A: 255},
 		maxBarHeight:    maxBarHeight,
@@ -144,7 +148,7 @@ func (f *Frame) Draw(barHeights []float64) {
 	f.drawFramingLines()
 
 	// Apply text overlay
-	if f.fontFace != nil {
+	if f.titleFace != nil || f.episodeFace != nil {
 		f.applyTextOverlay()
 	}
 }
@@ -307,9 +311,11 @@ func (f *Frame) mirrorBarHorizontal(xLeft, xRight, yStart, yEnd int) {
 
 // applyTextOverlay renders text onto the frame
 func (f *Frame) applyTextOverlay() {
-	if f.fontFace != nil {
-		DrawCenterText(f.img, f.fontFace, f.title, f.centerY, f.textColor)
-		DrawEpisodeNumber(f.img, f.fontFace, f.episodeNum, f.textColor)
+	if f.titleFace != nil {
+		DrawCenterText(f.img, f.titleFace, f.title, f.centerY, f.textColor)
+	}
+	if f.showEpisode && f.episodeFace != nil {
+		DrawEpisodeNumber(f.img, f.episodeFace, f.episodeNum, f.textColor)
 	}
 }
 

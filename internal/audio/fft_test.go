@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/argusdusty/gofft"
+	"github.com/linuxmatters/jivefire/internal/config"
 )
 
 // TestBinFFT_KnownSineWave verifies that BinFFT correctly identifies a known
@@ -50,7 +51,7 @@ func TestBinFFT_KnownSineWave(t *testing.T) {
 
 	// Bin the FFT results into 64 bars
 	result := make([]float64, numBars)
-	BinFFT(fftInput, sensitivity, baseScale, result)
+	BinFFT(fftInput, sampleRate, sensitivity, baseScale, result)
 
 	// Find the bar with maximum magnitude
 	maxVal := 0.0
@@ -121,7 +122,7 @@ func TestBinFFT_Silence(t *testing.T) {
 	silence := make([]complex128, fftSize)
 
 	result := make([]float64, numBars)
-	BinFFT(silence, sensitivity, baseScale, result)
+	BinFFT(silence, config.SampleRate, sensitivity, baseScale, result)
 
 	// All bars should be zero (or very close due to log scaling of near-zero)
 	for bar, val := range result {
@@ -171,7 +172,7 @@ func TestBinFFT_NoiseGate(t *testing.T) {
 	}
 
 	result := make([]float64, numBars)
-	BinFFT(fftInput, sensitivity, baseScale, result)
+	BinFFT(fftInput, config.SampleRate, sensitivity, baseScale, result)
 
 	// Most bars should be zero due to noise gate
 	zeroCount := 0
@@ -213,7 +214,7 @@ func TestBinFFT_EnergyDistribution(t *testing.T) {
 	}
 
 	result := make([]float64, numBars)
-	BinFFT(fftInput, sensitivity, baseScale, result)
+	BinFFT(fftInput, config.SampleRate, sensitivity, baseScale, result)
 
 	// Sum all bar energies
 	totalEnergy := 0.0

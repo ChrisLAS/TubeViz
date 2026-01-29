@@ -22,11 +22,36 @@ func ApplyHanning(data []float64) []float64 {
 // Returns normalized values (0.0-1.0) with perceptually accurate frequency representation
 // baseScale is calculated from Pass 1 analysis for optimal visualization
 // result buffer is provided by caller to avoid allocations
-func BinFFT(coeffs []complex128, sensitivity float64, baseScale float64, result []float64) {
+func BinFFT(coeffs []complex128, sampleRate int, sensitivity float64, baseScale float64, result []float64) {
+	binLogMagnitudes(coeffs, sampleRate, result)
+
+	// CAVA-style processing: apply sensitivity, then normalize to 0.0-1.0 range
+	// baseScale provided from Pass 1 analysis: OptimalBaseScale = 0.85 / GlobalPeak
+	for i := range result {
+		// Apply sensitivity to raw magnitude
+		scaled := result[i] * baseScale * sensitivity
+
+		// Noise gate on raw values (before log scale)
+		if scaled < 0.01 {
+			result[i] = 0
+		} else {
+			// Log scale for better visual distribution, normalize to ~0.0-1.0
+			// Log10(1 + scaled*9) gives range [0, 1] for scaled in [0, 1]
+			// We scale up for better dynamic range
+			result[i] = math.Log10(1 + scaled*9)
+
+			// DON'T clip here - let overshoot detection in main loop handle it
+			// This allows sensitivity adjustment to detect actual overshoots
+		}
+	}
+}
+
+// binLogMagnitudes fills result with raw magnitudes using logarithmic frequency distribution.
+// It does not apply sensitivity, baseScale, or log scaling.
+func binLogMagnitudes(coeffs []complex128, sampleRate int, result []float64) {
 	// Use only first half (positive frequencies)
 	halfSize := len(coeffs) / 2
-	sampleRate := config.SampleRate
-	fftSize := config.FFTSize
+	fftSize := len(coeffs)
 
 	// Create logarithmic frequency table (MinFreqHz to MaxFreqHz)
 	// This gives perceptually accurate frequency distribution matching human hearing
@@ -68,26 +93,6 @@ func BinFFT(coeffs []complex128, sensitivity float64, baseScale float64, result 
 			result[bar] = sum / float64(count)
 		} else {
 			result[bar] = 0
-		}
-	}
-
-	// CAVA-style processing: apply sensitivity, then normalize to 0.0-1.0 range
-	// baseScale provided from Pass 1 analysis: OptimalBaseScale = 0.85 / GlobalPeak
-	for i := range result {
-		// Apply sensitivity to raw magnitude
-		scaled := result[i] * baseScale * sensitivity
-
-		// Noise gate on raw values (before log scale)
-		if scaled < 0.01 {
-			result[i] = 0
-		} else {
-			// Log scale for better visual distribution, normalize to ~0.0-1.0
-			// Log10(1 + scaled*9) gives range [0, 1] for scaled in [0, 1]
-			// We scale up for better dynamic range
-			result[i] = math.Log10(1 + scaled*9)
-
-			// DON'T clip here - let overshoot detection in main loop handle it
-			// This allows sensitivity adjustment to detect actual overshoots
 		}
 	}
 }

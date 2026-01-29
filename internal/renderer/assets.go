@@ -5,20 +5,24 @@ import (
 	"embed"
 	"image"
 	"image/color"
-	"image/png"
 	"os"
+	"path/filepath"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"github.com/linuxmatters/jivefire/internal/config"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/font"
+
+	_ "image/jpeg"
+	_ "image/png"
 )
 
 //go:embed assets/bg.png
 //go:embed assets/thumb.png
 //go:embed assets/Poppins-Regular.ttf
 //go:embed assets/Poppins-Bold.ttf
+//go:embed assets/Ubuntu/*.ttf
 var embeddedAssets embed.FS
 
 // LoadBackgroundImage loads and scales the background image (from custom path or embedded asset)
@@ -33,15 +37,20 @@ func LoadBackgroundImage(runtimeConfig *config.RuntimeConfig) (*image.RGBA, erro
 		// Load from filesystem
 		data, err = os.ReadFile(imagePath)
 	} else {
-		// Load from embedded assets
-		data, err = embeddedAssets.ReadFile(imagePath)
+		// Prefer on-disk assets for local overrides, fallback to embedded assets
+		diskPath := filepath.Join("internal", "renderer", imagePath)
+		if _, statErr := os.Stat(diskPath); statErr == nil {
+			data, err = os.ReadFile(diskPath)
+		} else {
+			data, err = embeddedAssets.ReadFile(imagePath)
+		}
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	img, err := png.Decode(bytes.NewReader(data))
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
@@ -55,9 +64,9 @@ func LoadBackgroundImage(runtimeConfig *config.RuntimeConfig) (*image.RGBA, erro
 	return rgba, nil
 }
 
-// LoadFont loads the embedded TrueType font for video title overlay
-func LoadFont(size float64) (font.Face, error) {
-	fontBytes, err := embeddedAssets.ReadFile(config.VideoTitleFontAsset)
+// LoadFont loads an embedded TrueType font at the requested size.
+func LoadFont(assetPath string, size float64) (font.Face, error) {
+	fontBytes, err := embeddedAssets.ReadFile(assetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +83,16 @@ func LoadFont(size float64) (font.Face, error) {
 	})
 
 	return face, nil
+}
+
+// LoadTitleFont loads the embedded TrueType font for the video title overlay.
+func LoadTitleFont(size float64) (font.Face, error) {
+	return LoadFont(config.VideoTitleFontAsset, size)
+}
+
+// LoadEpisodeFont loads the embedded TrueType font for the episode number overlay.
+func LoadEpisodeFont(size float64) (font.Face, error) {
+	return LoadFont(config.VideoEpisodeFontAsset, size)
 }
 
 // DrawCenterText draws text centered horizontally at the specified Y position

@@ -55,6 +55,9 @@ const (
 	NoiseReduction = 0.77  // CAVA default integral smoothing
 	FallAccel      = 0.028 // CAVA gravity acceleration constant
 
+	// Extra decay smoothing for visualiser motion (higher = slower falloff)
+	DecaySmoothing = 0.82
+
 	// Gravity modifier formula: pow(GravityFramerateRef/Framerate, GravityExponent) * GravityBase / NoiseReduction
 	// This scales bar fall speed based on framerate deviation from CAVA's reference 60fps
 	GravityFramerateRef = 60.0 // CAVA reference framerate for gravity calculation
@@ -76,15 +79,16 @@ const (
 // Embedded assets are currently located in internal/renderer/assets/
 const (
 	// Bar colors (RGB values for visualization bars)
-	BarColorR = 164
-	BarColorG = 0
-	BarColorB = 0
+	// Bitcoin orange #F7931A
+	BarColorR = 247
+	BarColorG = 147
+	BarColorB = 26
 
 	// Text/UI colors (RGB values for title overlay and framing lines)
-	// Brand yellow #F8B31D - used for title text, framing lines, and thumbnail text
-	TextColorR = 248
-	TextColorG = 179
-	TextColorB = 29
+	// Bitcoin orange #F7931A - used for title text, framing lines, and thumbnail text
+	TextColorR = 247
+	TextColorG = 147
+	TextColorB = 26
 
 	// Embedded asset paths (relative to internal/renderer/assets/)
 	// Background image: bg.png - scaled to video resolution (1280x720)
@@ -93,14 +97,27 @@ const (
 	ThumbnailImageAsset  = "assets/thumb.png"
 
 	// Embedded font paths (relative to internal/renderer/assets/)
-	// Video title font: Poppins-Regular.ttf - used for video overlay text
-	// Thumbnail font: Poppins-Bold.ttf - used for thumbnail generation
-	VideoTitleFontAsset = "assets/Poppins-Regular.ttf"
-	ThumbnailFontAsset  = "assets/Poppins-Bold.ttf"
+	// Video title font: Ubuntu-Bold.ttf - used for video overlay title
+	// Episode number font: Ubuntu-Regular.ttf - used for video overlay episode number
+	// Thumbnail font: Ubuntu-Bold.ttf - used for thumbnail generation
+	VideoTitleFontAsset   = "assets/Ubuntu/Ubuntu-Bold.ttf"
+	VideoEpisodeFontAsset = "assets/Ubuntu/Ubuntu-Regular.ttf"
+	ThumbnailFontAsset    = "assets/Ubuntu/Ubuntu-Bold.ttf"
 
 	// Thumbnail layout
 	ThumbnailMargin              = 30  // Margin in pixels from edges for thumbnail text
 	ThumbnailTextRotationDegrees = 3.0 // Rotation angle for thumbnail text (degrees, clockwise)
+	ThumbnailBoxLeft             = 250 // Inner box bounds for thumbnail title text
+	ThumbnailBoxTop              = 40
+	ThumbnailBoxRight            = 1030
+	ThumbnailBoxBottom           = 360
+	ThumbnailBoxPadding          = 22
+	ThumbnailTextColorR          = 248 // #F8F6F2
+	ThumbnailTextColorG          = 246
+	ThumbnailTextColorB          = 242
+	ThumbnailShadowAlpha         = 140
+	ThumbnailGlowAlpha           = 120
+	ThumbnailGlowBlurRadius      = 6
 
 	// Video overlay
 	FramingLineHeight = 4 // Height in pixels of framing lines above/below center gap
@@ -117,9 +134,9 @@ const (
 // Synthwave theme HSV constants
 const (
 	SynthwaveHueStart = 0.83 // Purple start
-	SynthwaveHueMid1  = 0.80 // Purple-Pink transition
-	SynthwaveHueMid2  = 0.66 // Pink
-	SynthwaveHueEnd   = 0.50 // Orange-Cyan end
+	SynthwaveHueMid1  = 0.74 // Purple-Pink transition
+	SynthwaveHueMid2  = 0.10 // Orange transition
+	SynthwaveHueEnd   = 0.07 // Bitcoin orange end
 )
 
 // RuntimeConfig holds optional runtime overrides for customization

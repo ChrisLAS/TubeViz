@@ -62,8 +62,8 @@ func AnalyzeAudio(filename string, progressCb ProgressCallback) (*AudioProfile, 
 		Duration:   0, // Will be calculated from actual sample count
 	}
 
-	// Calculate frame size
-	samplesPerFrame := config.SampleRate / config.FPS
+	// Calculate frame size based on input sample rate
+	samplesPerFrame := reader.SampleRate() / config.FPS
 
 	// Create FFT processor
 	processor := NewProcessor()
@@ -104,7 +104,7 @@ func AnalyzeAudio(filename string, progressCb ProgressCallback) (*AudioProfile, 
 		coeffs := processor.ProcessChunk(fftBuffer)
 
 		// Analyze frequency bins
-		analysis := analyzeFrame(coeffs, fftBuffer)
+		analysis := analyzeFrame(coeffs, fftBuffer, reader.SampleRate())
 		profile.Frames = append(profile.Frames, analysis)
 
 		// Track global statistics
@@ -199,7 +199,7 @@ func AnalyzeAudio(filename string, progressCb ProgressCallback) (*AudioProfile, 
 }
 
 // analyzeFrame extracts statistics from FFT coefficients and audio chunk
-func analyzeFrame(coeffs []complex128, audioChunk []float64) FrameAnalysis {
+func analyzeFrame(coeffs []complex128, audioChunk []float64, sampleRate int) FrameAnalysis {
 	analysis := FrameAnalysis{}
 
 	// Calculate RMS of audio chunk
@@ -209,31 +209,13 @@ func analyzeFrame(coeffs []complex128, audioChunk []float64) FrameAnalysis {
 	}
 	analysis.RMSLevel = math.Sqrt(sumSquares / float64(len(audioChunk)))
 
-	// Analyze frequency bins (same logic as BinFFT)
-	// Use full spectrum up to Nyquist frequency for complete frequency coverage
-	halfSize := len(coeffs) / 2
-	maxFreqBin := halfSize
-	binsPerBar := maxFreqBin / config.NumBars
-
-	for bar := 0; bar < config.NumBars; bar++ {
-		start := bar * binsPerBar
-		end := start + binsPerBar
-		if end > maxFreqBin {
-			end = maxFreqBin
-		}
-
-		var sum float64
-		for i := start; i < end; i++ {
-			magnitude := math.Sqrt(real(coeffs[i])*real(coeffs[i]) + imag(coeffs[i])*imag(coeffs[i]))
-			sum += magnitude
-		}
-
-		avgMagnitude := sum / float64(binsPerBar)
-		analysis.BarMagnitudes[bar] = avgMagnitude
-
-		// Track peak
-		if avgMagnitude > analysis.PeakMagnitude {
-			analysis.PeakMagnitude = avgMagnitude
+	// Analyze frequency bins using the same logarithmic binning as BinFFT
+	var barMagnitudes [config.NumBars]float64
+	binLogMagnitudes(coeffs, sampleRate, barMagnitudes[:])
+	for bar, magnitude := range barMagnitudes {
+		analysis.BarMagnitudes[bar] = magnitude
+		if magnitude > analysis.PeakMagnitude {
+			analysis.PeakMagnitude = magnitude
 		}
 	}
 
